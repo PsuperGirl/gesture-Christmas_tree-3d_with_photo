@@ -871,8 +871,10 @@
         }
       }
     
-     function addPhotoToScene(texture) {
+       function addPhotoToScene(texture) {
         texture.colorSpace = THREE.SRGBColorSpace;
+        texture.flipY = false;
+        texture.needsUpdate = true;
     
         /* -----------------------------
            尺寸设计（核心）
@@ -932,14 +934,15 @@
     
         const photoGeo = new THREE.PlaneGeometry(imgW, imgH);
         const photoMat = new THREE.MeshPhysicalMaterial({
-            map: texture,
-            metalness: 0.0,
-            roughness: 0.75,              // ✅ 更纸
-            clearcoat: 0.12,
-            clearcoatRoughness: 0.5,
-            toneMapped: true,
+          map: texture,
+          metalness: 0.0,
+          roughness: 0.75,
+          clearcoat: 0.12,
+          clearcoatRoughness: 0.5,
+          toneMapped: true,
+          side: THREE.DoubleSide,   // ✅ 关键：避免看不到
         });
-    
+            
         const photo = new THREE.Mesh(photoGeo, photoMat);
         photo.position.z = paperDepth / 2 + 0.001;
     
@@ -963,23 +966,43 @@
         particleSystem.push(new Particle(group, 'PHOTO', false));
         updatePhotoLayout();
     }
+
+    function handleImageUpload(e) {
+      const files = e.target.files;
+      if (!files || !files.length) return;
     
-      function handleImageUpload(e) {
-        const files = e.target.files;
-        if (!files.length) return;
+      const loader = new THREE.TextureLoader();
     
-        Array.from(files).forEach(f => {
-          if (!f.type.startsWith('image/')) return;
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            new THREE.TextureLoader().load(ev.target.result, (t) => {
-              t.colorSpace = THREE.SRGBColorSpace;
-              addPhotoToScene(t);
-            });
-          };
-          reader.readAsDataURL(f);
-        });
-      }
+      Array.from(files).forEach((f) => {
+        if (!f.type.startsWith("image/")) return;
+    
+        const url = URL.createObjectURL(f);
+    
+        loader.load(
+          url,
+          (t) => {
+            // ✅ 关键：保证纹理正确显示
+            t.colorSpace = THREE.SRGBColorSpace;
+            t.flipY = false;                 // ✅ 稳：避免某些环境上下翻/不显示
+            t.needsUpdate = true;
+            t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() ?? 8);
+    
+            addPhotoToScene(t);
+    
+            // 用完释放
+            URL.revokeObjectURL(url);
+          },
+          undefined,
+          (err) => {
+            console.warn("Failed to load image:", f.name, err);
+            URL.revokeObjectURL(url);
+          }
+        );
+      });
+    
+      // 允许同一个文件重复选择也触发 change
+      e.target.value = "";
+    }
     
       function loadPredefinedImages() {
         const loader = new THREE.TextureLoader();
@@ -1170,6 +1193,7 @@
     </script>
 </body>
 </html>
+
 
 
 
