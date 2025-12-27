@@ -871,44 +871,58 @@
         }
       }
     
-      function addPhotoToScene(texture) {
-        // 让纹理颜色正确（你上传/加载时已经设 SRGB，这里再保险一次）
+    function addPhotoToScene(texture) {
         texture.colorSpace = THREE.SRGBColorSpace;
     
-        // --- 1) 拍立得白边底板（纸面） ---
-        // 宽高比例：上方留边小、下方留边大（典型 polaroid）
-        const paperW = 1.55;
-        const paperH = 1.85;
-        const paperGeo = new THREE.BoxGeometry(paperW, paperH, 0.05);
+        /* -----------------------------
+           尺寸设计（核心）
+           ----------------------------- */
+        const imgBase = 1.0;            // 照片基准尺寸
+        const border = 0.03;            // ✅ 极细边框（3%）
+        const paperDepth = 0.035;
     
+        /* -----------------------------
+           1) 纸面（几乎贴合照片）
+           ----------------------------- */
+        const paperW = imgBase + border * 2;
+        const paperH = imgBase + border * 2;
+    
+        const paperGeo = new THREE.BoxGeometry(paperW, paperH, paperDepth);
         const paperMat = new THREE.MeshPhysicalMaterial({
-            color: 0xf7f2ea,        // 暖白纸
-            roughness: 0.55,        // 纸面略粗糙
+            color: 0xf6f2ea,
+            roughness: 0.6,
             metalness: 0.0,
-            clearcoat: 0.25,        // 轻微覆膜感
-            clearcoatRoughness: 0.55,
-            sheen: 0.25,            // 纸质柔光
-            sheenRoughness: 0.8,
+            clearcoat: 0.18,
+            clearcoatRoughness: 0.6,
+            sheen: 0.2,
+            sheenRoughness: 0.9,
         });
-    
         const paper = new THREE.Mesh(paperGeo, paperMat);
     
-        // --- 2) 金色相框（只给轻微 emissive，让 Bloom 出“柔边”但不炸） ---
-        const frameGeo = new THREE.BoxGeometry(paperW * 1.02, paperH * 1.02, 0.055);
+        /* -----------------------------
+           2) 极细金框（几乎不自发光）
+           ----------------------------- */
+        const frameGeo = new THREE.BoxGeometry(
+            paperW + 0.015,
+            paperH + 0.015,
+            paperDepth + 0.01
+        );
+    
         const frameMat = new THREE.MeshStandardMaterial({
             color: CONFIG.colors.champagneGold,
             metalness: 1.0,
-            roughness: 0.18,
-            envMapIntensity: 1.8,
-            emissive: 0x2a1b00,      // ✅ 更克制的自发光（关键：别太亮）
-            emissiveIntensity: 0.22, // ✅ 柔和金边
+            roughness: 0.25,
+            envMapIntensity: 1.4,
+            emissive: 0x000000,          // ✅ 关键：不靠 emissive
+            emissiveIntensity: 0.0
         });
         const frame = new THREE.Mesh(frameGeo, frameMat);
     
-        // --- 3) 照片区域（用 Standard/Physical，不用 Basic，避免过亮推爆 Bloom） ---
-        // 图片区域占比：上边距 0.13，下边距 0.35 左右
-        let imgW = 1.25;
-        let imgH = 1.10;
+        /* -----------------------------
+           3) 照片本体（绝不炸 Bloom）
+           ----------------------------- */
+        let imgW = imgBase;
+        let imgH = imgBase;
     
         if (texture.image) {
             const aspect = texture.image.width / texture.image.height;
@@ -917,36 +931,32 @@
         }
     
         const photoGeo = new THREE.PlaneGeometry(imgW, imgH);
-    
         const photoMat = new THREE.MeshPhysicalMaterial({
             map: texture,
             metalness: 0.0,
-            roughness: 0.65,          // ✅ 更“纸面”，减少爆亮
-            clearcoat: 0.18,          // 微弱覆膜反光
-            clearcoatRoughness: 0.35,
-            toneMapped: true,         // ✅ 让曝光/色调映射影响它（更稳）
+            roughness: 0.75,              // ✅ 更纸
+            clearcoat: 0.12,
+            clearcoatRoughness: 0.5,
+            toneMapped: true,
         });
     
         const photo = new THREE.Mesh(photoGeo, photoMat);
+        photo.position.z = paperDepth / 2 + 0.001;
     
-        // 放到纸面上方（上边距稍大、下边距更大）
-        photo.position.set(0, 0.18, 0.035);
-    
-        // --- 4) 组合 Group ---
+        /* -----------------------------
+           4) 组合
+           ----------------------------- */
         const group = new THREE.Group();
         group.add(frame);
         group.add(paper);
         group.add(photo);
     
-        // 轻微厚度层级，避免 z-fighting
-        frame.position.z = 0.0;
+        frame.position.z = 0;
         paper.position.z = 0.002;
     
-        // 小小倾斜更“挂饰感”
-        group.rotation.z = (Math.random() - 0.5) * 0.22;
+        group.rotation.z = (Math.random() - 0.5) * 0.12;
     
-        // 统一缩放
-        const s = 0.8;
+        const s = 0.85;
         group.scale.set(s, s, s);
     
         photoMeshGroup.add(group);
@@ -1160,5 +1170,6 @@
     </script>
 </body>
 </html>
+
 
 
